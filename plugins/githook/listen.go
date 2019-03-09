@@ -45,8 +45,9 @@ func (gh Githook) Listen(b bot.Bot) {
 
 func (gh Githook) doListen(notify func(string)) {
 	hook, _ := github.New(github.Options.Secret(gh.Secret))
+
 	http.HandleFunc(gh.Path, func(w http.ResponseWriter, r *http.Request) {
-		payload, err := hook.Parse(r, github.PushEvent)
+		payload, err := hook.Parse(r, github.PushEvent, github.PingEvent)
 		if err != nil {
 			log.Printf("hook.Parse: %s\n", err)
 			return
@@ -60,9 +61,10 @@ func (gh Githook) doListen(notify func(string)) {
 			}
 		case github.PingPayload:
 			ping := payload.(github.PingPayload)
-			fmt.Printf("%+v\n", ping)
+			log.Printf("pinged: %+v\n", ping)
 		}
 	})
+
 	http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil)
 }
 
