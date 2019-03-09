@@ -21,7 +21,7 @@ type config struct {
 	Username string
 	Realname string
 	Channels []string
-	Githooks []githook.Githook
+	Githook  githook.Githook
 }
 
 func main() {
@@ -49,9 +49,7 @@ func main() {
 		cfg.Ssl, cfg.Nickname, cfg.Username, cfg.Channels)
 
 	// TODO check channel in conf even
-	for _, gh := range cfg.Githooks {
-		gh.Listen(b)
-	}
+	cfg.Githook.Listen(b)
 
 	b.Run()
 }
