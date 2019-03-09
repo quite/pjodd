@@ -27,36 +27,39 @@ func shorten(longurl string) string {
 	return loc[0]
 }
 
+func lastString(ss []string) string {
+	return ss[len(ss)-1]
+}
+
 func push(push github.PushPayload) []string {
 	lines := []string{}
 
-	l := ""
-	l += fmt.Sprintf("[%s]", push.Repository.Name)
-	l += fmt.Sprintf(" %s", push.Pusher.Name)
-
-	l += " "
+	repo := push.Repository.Name
+	repofull := push.Repository.FullName
+	pusher := push.Pusher.Name
+	verb := "pushed"
 	if push.Forced {
-		l += "force-"
+		verb = "force-" + verb
 	}
-	l += "pushed"
-	l += fmt.Sprintf(" %d commit", len(push.Commits))
-	if len(push.Commits) > 1 {
-		l += fmt.Sprintf("s")
+	count := len(push.Commits)
+	noun := "commit"
+	if count > 1 {
+		noun += "s"
 	}
+	branch := lastString(strings.Split(push.Ref, "/"))
 
-	ss := strings.Split(push.Ref, "/")
-	branch := ss[len(ss)-1]
-	l += fmt.Sprintf(" to %s", branch)
-
-	long := ""
-	if len(push.Commits) == 1 {
-		long = fmt.Sprintf("https://github.com/%s/commit/%s",
-			push.Repository.FullName, push.HeadCommit.ID)
+	longurl := ""
+	if count == 1 {
+		longurl = fmt.Sprintf("https://github.com/%s/commit/%s",
+			repofull, push.HeadCommit.ID)
 	} else {
-		long = fmt.Sprintf("https://github.com/%s/compare/%s...%s",
-			push.Repository.FullName, push.Before, push.After)
+		longurl = fmt.Sprintf("https://github.com/%s/compare/%s...%s",
+			repofull, push.Before, push.After)
 	}
-	l += fmt.Sprintf(": %s", shorten(long))
+
+	l := fmt.Sprintf("[%s] %s %s %d %s to %s: %s",
+		repo, pusher, verb, count, noun,
+		branch, shorten(longurl))
 	lines = append(lines, l)
 
 	first := len(push.Commits) - 3
