@@ -1,0 +1,13 @@
+server = "localhost"
+ssl = false
+nickname = "pjodd"
+username = "pjodd"
+realname = "Pjodd"
+channels = ["#test"]
+
+#[githook]
+#server = ""
+#port = 32032
+#path = "/somepath"
+#secret = "shared_secret"
+#channel = "#test"

@@ -7,7 +7,7 @@ import (
 	"log"
 
 	"github.com/BurntSushi/toml"
-	"github.com/quite/pjoddbot/plugins/githook"
+	"github.com/quite/pjodd/plugins/githook"
 
 	"github.com/StalkR/goircbot/bot"
 	"github.com/fluffle/goirc/logging/glog"
