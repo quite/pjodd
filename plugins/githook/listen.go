@@ -13,9 +13,58 @@ import (
 )
 
 // only github so far...
+
 const (
 	maxcommits = 3
 )
+
+type Githook struct {
+	Server  string
+	Port    int
+	Path    string
+	Secret  string
+	Channel string
+}
+
+func (gh Githook) Listen(b bot.Bot) {
+	log.Printf("channel %s : github webhook listening %s:%d%s",
+		gh.Channel, gh.Server, gh.Port, gh.Path)
+
+	go gh.doListen(func(line string) {
+		if !b.Connected() {
+			log.Printf("notify: not connected")
+			return
+		}
+		if !stringIn(gh.Channel, b.Channels()) {
+			log.Printf("notify: not on %s\n", gh.Channel)
+			return
+		}
+		b.Privmsg(gh.Channel, line)
+	})
+}
+
+func (gh Githook) doListen(notify func(string)) {
+	hook, _ := github.New(github.Options.Secret(gh.Secret))
+	http.HandleFunc(gh.Path, func(w http.ResponseWriter, r *http.Request) {
+		payload, err := hook.Parse(r, github.PushEvent)
+		if err != nil {
+			log.Printf("hook.Parse: %s\n", err)
+			return
+		}
+		switch payload.(type) {
+
+		case github.PushPayload:
+			lines := buildPushLines(payload.(github.PushPayload))
+			for _, l := range lines {
+				notify(l)
+			}
+		case github.PingPayload:
+			ping := payload.(github.PingPayload)
+			fmt.Printf("%+v\n", ping)
+		}
+	})
+	http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil)
+}
 
 func shorten(longurl string) string {
 	resp, err := http.PostForm("https://git.io",
@@ -34,6 +83,15 @@ func lastString(ss []string) string {
 	return ss[len(ss)-1]
 }
 
+func stringIn(s string, ss []string) bool {
+	for _, has := range ss {
+		if has == s {
+			return true
+		}
+	}
+	return false
+}
+
 func abs(i int) int {
 	if i < 0 {
 		i = -i
@@ -41,7 +99,7 @@ func abs(i int) int {
 	return i
 }
 
-func push(push github.PushPayload) []string {
+func buildPushLines(push github.PushPayload) []string {
 	lines := []string{}
 
 	repo := push.Repository.Name
@@ -83,47 +141,4 @@ func push(push github.PushPayload) []string {
 	}
 
 	return lines
-}
-
-func listen(hostport string, path string, secret string, notify func(string)) {
-	hook, _ := github.New(github.Options.Secret(secret))
-	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		payload, err := hook.Parse(r, github.PushEvent)
-		if err != nil {
-			log.Printf("hook.Parse: %s\n", err)
-			return
-		}
-		switch payload.(type) {
-
-		case github.PushPayload:
-			lines := push(payload.(github.PushPayload))
-			for _, l := range lines {
-				notify(l)
-			}
-		case github.PingPayload:
-			ping := payload.(github.PingPayload)
-			fmt.Printf("%+v\n", ping)
-		}
-	})
-	http.ListenAndServe(hostport, nil)
-}
-
-func notify(b bot.Bot, channel string, line string) {
-	if !b.Connected() {
-		return
-	}
-	for _, onchan := range b.Channels() {
-		if onchan == channel {
-			b.Privmsg(channel, line)
-			return
-		}
-	}
-	log.Printf("notify: I'm not on channel %s\n", channel)
-}
-
-func Listen(b bot.Bot, hostport string, path string, secret string, channel string) {
-	log.Printf("channel %s : github webhook listening %s%s", channel, hostport, path)
-	go listen(hostport, path, secret, func(line string) {
-		notify(b, channel, line)
-	})
 }
