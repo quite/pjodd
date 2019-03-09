@@ -30,20 +30,24 @@ func (gh Githook) Listen(b bot.Bot) {
 	log.Printf("channel %s : github webhook listening %s:%d%s",
 		gh.Channel, gh.Server, gh.Port, gh.Path)
 
-	go gh.doListen(func(line string) {
-		if !b.Connected() {
-			log.Printf("notify: not connected")
-			return
-		}
-		if !stringIn(gh.Channel, b.Channels()) {
-			log.Printf("notify: not on %s\n", gh.Channel)
-			return
-		}
-		b.Privmsg(gh.Channel, line)
-	})
+	go gh.doListen(
+		func(line string) {
+			if !b.Connected() {
+				log.Printf("say: not connected")
+				return
+			}
+			if !stringIn(gh.Channel, b.Channels()) {
+				log.Printf("say: not on %s\n", gh.Channel)
+				return
+			}
+			b.Privmsg(gh.Channel, line)
+		},
+		func(msg string) {
+			b.Quit(msg)
+		})
 }
 
-func (gh Githook) doListen(notify func(string)) {
+func (gh Githook) doListen(say func(string), quit func(string)) {
 	hook, _ := github.New(github.Options.Secret(gh.Secret))
 
 	http.HandleFunc(gh.Path, func(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +60,7 @@ func (gh Githook) doListen(notify func(string)) {
 		case github.PushPayload:
 			lines := buildPushLines(payload.(github.PushPayload))
 			for _, l := range lines {
-				notify(l)
+				say(l)
 			}
 		case github.PingPayload:
 			ping := payload.(github.PingPayload)
@@ -64,7 +68,12 @@ func (gh Githook) doListen(notify func(string)) {
 		}
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil))
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil)
+	if err != nil {
+		//TODO be more graceful perhaps. quit at all?
+		quit(err.Error())
+		log.Fatal(err)
+	}
 }
 
 func shorten(longurl string) string {
