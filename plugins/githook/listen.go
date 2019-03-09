@@ -13,6 +13,9 @@ import (
 )
 
 // only github so far...
+const (
+	maxcommits = 3
+)
 
 func shorten(longurl string) string {
 	resp, err := http.PostForm("https://git.io",
@@ -29,6 +32,13 @@ func shorten(longurl string) string {
 
 func lastString(ss []string) string {
 	return ss[len(ss)-1]
+}
+
+func abs(i int) int {
+	if i < 0 {
+		i = -i
+	}
+	return i
 }
 
 func push(push github.PushPayload) []string {
@@ -62,21 +72,16 @@ func push(push github.PushPayload) []string {
 		branch, shorten(longurl))
 	lines = append(lines, l)
 
-	first := len(push.Commits) - 3
-	if first < 0 {
-		first = 0
+	for i := count - 1; i >= 0; i-- {
+		if i >= abs(count-maxcommits) && i <= abs(count-1) {
+			c := push.Commits[i]
+			subject := lastString(strings.Split(c.Message, "\n"))
+			l := fmt.Sprintf("%s/%s %s %s: %s",
+				repo, branch, c.ID[:7], c.Committer.Name, subject)
+			lines = append(lines, l)
+		}
 	}
-	last := len(push.Commits) - 1
-	if last < 0 {
-		last = 0
-	}
-	for i := last; i >= first; i-- {
-		c := push.Commits[i]
-		ss = strings.Split(c.Message, "\n")
-		l := fmt.Sprintf("%s/%s %s %s: %s",
-			push.Repository.Name, branch, c.ID[:7], c.Committer.Name, ss[0])
-		lines = append(lines, l)
-	}
+
 	return lines
 }
 
