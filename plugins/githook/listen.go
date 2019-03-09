@@ -65,7 +65,7 @@ func (gh Githook) doListen(notify func(string)) {
 		}
 	})
 
-	http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil))
 }
 
 func shorten(longurl string) string {
