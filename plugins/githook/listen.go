@@ -53,7 +53,6 @@ func (gh Githook) doListen(notify func(string)) {
 			return
 		}
 		switch payload.(type) {
-
 		case github.PushPayload:
 			lines := buildPushLines(payload.(github.PushPayload))
 			for _, l := range lines {
@@ -106,6 +105,7 @@ func buildPushLines(push github.PushPayload) []string {
 
 	repo := push.Repository.Name
 	repofull := push.Repository.FullName
+	log.Printf("push: %s\n", repofull)
 	pusher := push.Pusher.Name
 	verb := "pushed"
 	if push.Forced {
