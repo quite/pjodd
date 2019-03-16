@@ -141,14 +141,13 @@ func buildPushLines(push github.PushPayload) []string {
 		branch, shorten(longurl))
 	lines = append(lines, l)
 
-	for i := count - 1; i >= 0; i-- {
-		if i >= abs(count-maxcommits) && i <= abs(count-1) {
-			c := push.Commits[i]
-			subject := lastString(strings.Split(c.Message, "\n"))
-			l := fmt.Sprintf("%s/%s %s %s: %s",
-				repo, branch, c.ID[:7], c.Committer.Name, subject)
-			lines = append(lines, l)
-		}
+	for i, n := count-1, maxcommits; i >= 0 && n > 0; i-- {
+		c := push.Commits[i]
+		subject := lastString(strings.Split(c.Message, "\n"))
+		l := fmt.Sprintf("%s/%s %s %s: %s",
+			repo, branch, c.ID[:7], c.Committer.Name, subject)
+		lines = append(lines, l)
+		n--
 	}
 
 	return lines
