@@ -19,56 +19,73 @@ const (
 )
 
 type Githook struct {
-	Server  string
-	Port    int
+	Host   string
+	Port   int
+	Target []Target
+}
+
+type Target struct {
+	Type    string
 	Path    string
 	Secret  string
 	Channel string
 }
 
 func (gh Githook) Listen(b bot.Bot) {
-	log.Printf("channel %s : github webhook listening %s:%d%s",
-		gh.Channel, gh.Server, gh.Port, gh.Path)
-
 	go gh.doListen(
-		func(line string) {
+		func(ch string, line string) {
 			if !b.Connected() {
 				log.Printf("say: not connected")
 				return
 			}
-			if !stringIn(gh.Channel, b.Channels()) {
-				log.Printf("say: not on %s\n", gh.Channel)
+			if !stringIn(ch, b.Channels()) {
+				log.Printf("say: not on %s\n", ch)
 				return
 			}
-			b.Privmsg(gh.Channel, line)
+			b.Privmsg(ch, line)
 		},
 		func(msg string) {
 			b.Quit(msg)
 		})
 }
 
-func (gh Githook) doListen(say func(string), quit func(string)) {
-	hook, _ := github.New(github.Options.Secret(gh.Secret))
+func (gh Githook) doListen(say func(string, string), quit func(string)) {
+	for _, target := range gh.Target {
+		// rebind to a new var for the closure
+		target := target
 
-	http.HandleFunc(gh.Path, func(w http.ResponseWriter, r *http.Request) {
-		payload, err := hook.Parse(r, github.PushEvent, github.PingEvent)
-		if err != nil {
-			log.Printf("hook.Parse: %s\n", err)
-			return
+		if target.Type != "github" {
+			fmt.Printf("githook target type not supported: %s\n", target.Type)
+			continue
 		}
-		switch payload.(type) {
-		case github.PushPayload:
-			lines := buildPushLines(payload.(github.PushPayload))
-			for _, l := range lines {
-				say(l)
+
+		log.Printf("githook github target path:%s channel:%s\n",
+			target.Path, target.Channel)
+		hook, _ := github.New(github.Options.Secret(target.Secret))
+
+		http.HandleFunc(target.Path, func(w http.ResponseWriter, r *http.Request) {
+			payload, err := hook.Parse(r, github.PushEvent, github.PingEvent)
+			if err != nil {
+				log.Printf("hook.Parse: %s\n", err)
+				return
 			}
-		case github.PingPayload:
-			ping := payload.(github.PingPayload)
-			log.Printf("pinged: %+v\n", ping)
-		}
-	})
+			switch payload.(type) {
+			case github.PushPayload:
+				lines := buildPushLines(payload.(github.PushPayload))
+				log.Printf("path:%s channel:%s\n", target.Path, target.Channel)
+				for _, l := range lines {
+					say(target.Channel, l)
+					log.Printf("  %s\n", l)
+				}
+			case github.PingPayload:
+				ping := payload.(github.PingPayload)
+				log.Printf("pinged: %+v\n", ping)
+			}
+		})
+	}
 
-	err := http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Server, gh.Port), nil)
+	log.Printf("githook listening on %s:%d\n", gh.Host, gh.Port)
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Host, gh.Port), nil)
 	if err != nil {
 		//TODO be more graceful perhaps. quit at all?
 		quit(err.Error())
@@ -114,7 +131,6 @@ func buildPushLines(push github.PushPayload) []string {
 
 	repo := push.Repository.Name
 	repofull := push.Repository.FullName
-	log.Printf("push: %s\n", repofull)
 	pusher := push.Pusher.Name
 	verb := "pushed"
 	if push.Forced {

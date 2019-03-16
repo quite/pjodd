@@ -6,8 +6,10 @@ realname = "Pjodd"
 channels = ["#test"]
 
 #[githook]
-#server = ""
+#host = ""
 #port = 32032
-#path = "/somepath"
+#[[githook.target]]
+#type = "github"
+#path = "/path_part_of_payload_url"
 #secret = "shared_secret"
 #channel = "#test"
