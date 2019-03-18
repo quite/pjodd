@@ -69,17 +69,16 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 				log.Printf("hook.Parse: %s\n", err)
 				return
 			}
-			switch payload.(type) {
+			switch payload := payload.(type) {
 			case github.PushPayload:
-				lines := buildPushLines(payload.(github.PushPayload))
+				lines := buildPushLines(payload)
 				log.Printf("path:%s channel:%s\n", target.Path, target.Channel)
 				for _, l := range lines {
 					say(target.Channel, l)
 					log.Printf("  %s\n", l)
 				}
 			case github.PingPayload:
-				ping := payload.(github.PingPayload)
-				log.Printf("pinged: %+v\n", ping)
+				log.Printf("pinged: %+v\n", payload)
 			}
 		})
 	}
