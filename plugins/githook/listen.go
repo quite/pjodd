@@ -118,13 +118,6 @@ func stringIn(s string, ss []string) bool {
 	return false
 }
 
-func abs(i int) int {
-	if i < 0 {
-		i = -i
-	}
-	return i
-}
-
 func buildPushLines(push github.PushPayload) []string {
 	lines := []string{}
 
