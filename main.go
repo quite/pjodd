@@ -24,6 +24,10 @@ type config struct {
 	Githook  githook.Githook
 }
 
+func (cfg *config) validate() error {
+	return cfg.Githook.Validate(cfg.Channels)
+}
+
 func main() {
 	cfg := config{
 		Server:   "localhost",
@@ -32,7 +36,7 @@ func main() {
 		Nickname: "pjodd",
 		Username: "pjodd",
 		Realname: "Pjodd", //unused
-		Channels: []string{"test"},
+		Channels: []string{"#test"},
 	}
 
 	configflag := flag.String("config", "config.toml", "config file")
@@ -42,13 +46,16 @@ func main() {
 	if _, err := toml.DecodeFile(*configflag, &cfg); err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg.validate(); err != nil {
+		log.Fatal(fmt.Errorf("error validating Githook config: %s", err))
+	}
+
 	log.Printf("server:%s:%d nick:%s channels:%v",
 		cfg.Server, cfg.Port, cfg.Nickname, cfg.Channels)
 
 	b := bot.NewBot(fmt.Sprintf("%s:%d", cfg.Server, cfg.Port),
 		cfg.Ssl, cfg.Nickname, cfg.Username, cfg.Channels)
 
-	// TODO check channel in conf even
 	cfg.Githook.Listen(b)
 
 	b.Run()

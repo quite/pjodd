@@ -8,15 +8,15 @@ import (
 	"strings"
 
 	"github.com/StalkR/goircbot/bot"
-
 	"gopkg.in/go-playground/webhooks.v5/github"
 )
-
-// only github so far...
 
 const (
 	maxcommits = 3
 )
+
+// Only github for now
+var types = []string{"github"}
 
 type Githook struct {
 	Host   string
@@ -29,6 +29,35 @@ type Target struct {
 	Path    string
 	Secret  string
 	Channel string
+}
+
+func contains(ss []string, s string) bool {
+	for _, i := range ss {
+		if i == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (gh Githook) Validate(channels []string) error {
+	if gh.Port == 0 {
+		return fmt.Errorf("http listen port not configured (==0)")
+	}
+	if len(gh.Target) == 0 {
+		return fmt.Errorf("no targets configured")
+	}
+	for _, target := range gh.Target {
+		if !contains(types, target.Type) {
+			return fmt.Errorf("target type `%s` is not one of %v",
+				target.Type, types)
+		}
+		if !contains(channels, target.Channel) {
+			return fmt.Errorf("target channel `%s` is not among the configured %s",
+				target.Channel, channels)
+		}
+	}
+	return nil
 }
 
 func (gh Githook) Listen(b bot.Bot) {
@@ -53,11 +82,6 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 	for _, target := range gh.Target {
 		// rebind to a new var for the closure
 		target := target
-
-		if target.Type != "github" {
-			fmt.Printf("githook target type not supported: %s\n", target.Type)
-			continue
-		}
 
 		log.Printf("githook github target path:%s channel:%s\n",
 			target.Path, target.Channel)
