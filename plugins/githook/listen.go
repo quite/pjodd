@@ -49,7 +49,7 @@ func (gh Githook) Validate(channels []string) error {
 	}
 	for _, target := range gh.Target {
 		if !contains(types, target.Type) {
-			return fmt.Errorf("target type `%s` is not one of %v",
+			return fmt.Errorf("target type `%s` is not one of %s",
 				target.Type, types)
 		}
 		if !contains(channels, target.Channel) {
