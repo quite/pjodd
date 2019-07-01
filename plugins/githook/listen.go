@@ -122,6 +122,8 @@ func shorten(longurl string) string {
 	if err != nil {
 		return longurl
 	}
+	defer resp.Body.Close()
+
 	loc, ok := resp.Header["Location"]
 	if !ok {
 		return longurl
