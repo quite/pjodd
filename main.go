@@ -35,7 +35,7 @@ func main() {
 		Ssl:      false,
 		Nickname: "pjodd",
 		Username: "pjodd",
-		Realname: "Pjodd", //unused
+		Realname: "Pjodd", // unused
 		Channels: []string{"#test"},
 	}
 

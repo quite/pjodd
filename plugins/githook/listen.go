@@ -110,7 +110,7 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 	log.Printf("githook listening on %s:%d\n", gh.Host, gh.Port)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Host, gh.Port), nil)
 	if err != nil {
-		//TODO be more graceful perhaps. quit at all?
+		// TODO be more graceful perhaps. quit at all?
 		quit(err.Error())
 		log.Fatal(err)
 	}
