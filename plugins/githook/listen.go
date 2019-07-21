@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/StalkR/goircbot/bot"
@@ -135,21 +134,6 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 	}
 }
 
-func shorten(longurl string) string {
-	resp, err := http.PostForm("https://git.io",
-		url.Values{"url": {longurl}})
-	if err != nil {
-		return longurl
-	}
-	defer resp.Body.Close()
-
-	loc, ok := resp.Header["Location"]
-	if !ok {
-		return longurl
-	}
-	return loc[0]
-}
-
 func lastString(ss []string) string {
 	return ss[len(ss)-1]
 }
@@ -170,7 +154,6 @@ type pushData struct {
 	verb     string
 	count    int64
 	branch   string
-	longURL  string
 	commits  []commitData
 }
 type commitData struct {
@@ -190,13 +173,6 @@ func newPushDataFromGithub(push github.PushPayload) *pushData {
 	}
 	pd.count = int64(len(push.Commits))
 	pd.branch = lastString(strings.Split(push.Ref, "/"))
-	if pd.count == 1 {
-		pd.longURL = fmt.Sprintf("https://github.com/%s/commit/%s",
-			pd.repoFull, push.HeadCommit.ID)
-	} else {
-		pd.longURL = fmt.Sprintf("https://github.com/%s/compare/%s...%s",
-			pd.repoFull, push.Before, push.After)
-	}
 	for _, c := range push.Commits {
 		pd.commits = append(pd.commits,
 			commitData{
@@ -217,12 +193,6 @@ func newPushDataFromGitlab(push gitlab.PushEventPayload) *pushData {
 	// TODO no force-pushed?
 	pd.count = push.TotalCommitsCount
 	pd.branch = lastString(strings.Split(push.Ref, "/"))
-	if pd.count == 1 {
-		pd.longURL = push.Commits[0].URL
-	} else {
-		pd.longURL = fmt.Sprintf("%s/%s...%s",
-			push.Project.WebURL, push.Before, push.After)
-	}
 	for _, c := range push.Commits {
 		pd.commits = append(pd.commits,
 			commitData{
@@ -240,10 +210,8 @@ func (pd *pushData) buildPushLines() []string {
 	if pd.count > 1 {
 		noun += "s"
 	}
-	// TODO shorten longurl
-	l := fmt.Sprintf("[%s] %s %s %d %s to %s: %s",
-		pd.repo, pd.pusher, pd.verb, pd.count, noun,
-		pd.branch, pd.longURL)
+	l := fmt.Sprintf("[%s] %s %s %d %s to %s:",
+		pd.repo, pd.pusher, pd.verb, pd.count, noun, pd.branch)
 	lines = append(lines, l)
 
 	for i, n := len(pd.commits)-1, maxcommits; i >= 0 && n > 0; i-- {
