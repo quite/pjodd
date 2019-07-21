@@ -9,7 +9,6 @@ channels = ["#test"]
 #host = ""
 #port = 32032
 #[[githook.target]]
-#type = "github"
 #path = "/path_part_of_payload_url"
 #secret = "shared_secret"
 #channel = "#test"
