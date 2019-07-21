@@ -9,14 +9,12 @@ import (
 
 	"github.com/StalkR/goircbot/bot"
 	"gopkg.in/go-playground/webhooks.v5/github"
+	"gopkg.in/go-playground/webhooks.v5/gitlab"
 )
 
 const (
 	maxcommits = 3
 )
-
-// Only github for now
-var types = []string{"github", "gitlab"}
 
 type Githook struct {
 	Host   string
@@ -80,23 +78,23 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 
 		log.Printf("githook github target path:%s channel:%s\n",
 			target.Path, target.Channel)
-		hook, _ := github.New(github.Options.Secret(target.Secret))
 
 		http.HandleFunc(target.Path, func(w http.ResponseWriter, r *http.Request) {
 			_, fromGithub := r.Header["X-Github-Event"]
 			_, fromGitlab := r.Header["X-Gitlab-Event"]
 			switch {
 			case fromGithub:
+				hook, _ := github.New(github.Options.Secret(target.Secret))
 				payload, err := hook.Parse(r, github.PushEvent, github.PingEvent)
 				if err != nil {
-					log.Printf("hook.Parse: %s\n", err)
+					log.Printf("github hook.Parse: %s\n", err)
 					return
 				}
 				switch payload := payload.(type) {
 				case github.PushPayload:
-					lines := buildPushLines(payload)
 					log.Printf("path:%s channel:%s\n", target.Path, target.Channel)
-					for _, l := range lines {
+					pd := newPushDataFromGithub(payload)
+					for _, l := range pd.buildPushLines() {
 						say(target.Channel, l)
 						log.Printf("  %s\n", l)
 					}
@@ -104,7 +102,24 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 					log.Printf("pinged: %+v\n", payload)
 				}
 			case fromGitlab:
-				log.Printf("gitlab not yet handled")
+				hook, _ := gitlab.New(gitlab.Options.Secret(target.Secret))
+				payload, err := hook.Parse(r, gitlab.PushEvents)
+				if err != nil {
+					log.Printf("gitlab hook.Parse: %s\n", err)
+					log.Printf("  %#v\n", r.Header)
+					return
+				}
+				switch payload := payload.(type) {
+				case gitlab.PushEventPayload:
+					log.Printf("path:%s channel:%s\n", target.Path, target.Channel)
+					pd := newPushDataFromGitlab(payload)
+					for _, l := range pd.buildPushLines() {
+						say(target.Channel, l)
+						log.Printf("  %s\n", l)
+					}
+					// case gitlab.PingPayload:
+					//      log.Printf("pinged: %+v\n", payload)
+				}
 			default:
 				log.Printf("webhooked from neither github nor gitlab")
 			}
@@ -148,42 +163,93 @@ func stringIn(s string, ss []string) bool {
 	return false
 }
 
-func buildPushLines(push github.PushPayload) []string {
-	lines := []string{}
+type pushData struct {
+	repo     string
+	repoFull string
+	pusher   string
+	verb     string
+	count    int64
+	branch   string
+	longURL  string
+	commits  []commitData
+}
+type commitData struct {
+	message   string
+	id        string
+	committer string
+}
 
-	repo := push.Repository.Name
-	repofull := push.Repository.FullName
-	pusher := push.Pusher.Name
-	verb := "pushed"
+func newPushDataFromGithub(push github.PushPayload) *pushData {
+	pd := pushData{}
+	pd.repo = push.Repository.Name
+	pd.repoFull = push.Repository.FullName
+	pd.pusher = push.Pusher.Name
+	pd.verb = "pushed"
 	if push.Forced {
-		verb = "force-" + verb
+		pd.verb = "force-" + pd.verb
 	}
-	count := len(push.Commits)
+	pd.count = int64(len(push.Commits))
+	pd.branch = lastString(strings.Split(push.Ref, "/"))
+	if pd.count == 1 {
+		pd.longURL = fmt.Sprintf("https://github.com/%s/commit/%s",
+			pd.repoFull, push.HeadCommit.ID)
+	} else {
+		pd.longURL = fmt.Sprintf("https://github.com/%s/compare/%s...%s",
+			pd.repoFull, push.Before, push.After)
+	}
+	for _, c := range push.Commits {
+		pd.commits = append(pd.commits,
+			commitData{
+				message:   c.Message,
+				id:        c.ID,
+				committer: c.Committer.Name,
+			})
+	}
+	return &pd
+}
+
+func newPushDataFromGitlab(push gitlab.PushEventPayload) *pushData {
+	pd := pushData{}
+	pd.repo = push.Project.Name
+	pd.repoFull = push.Project.PathWithNamespace
+	pd.pusher = push.UserName
+	pd.verb = "pushed"
+	// TODO no force-pushed?
+	pd.count = push.TotalCommitsCount
+	pd.branch = lastString(strings.Split(push.Ref, "/"))
+	if pd.count == 1 {
+		pd.longURL = push.Commits[0].URL
+	} else {
+		pd.longURL = fmt.Sprintf("%s/%s...%s",
+			push.Project.WebURL, push.Before, push.After)
+	}
+	for _, c := range push.Commits {
+		pd.commits = append(pd.commits,
+			commitData{
+				message:   c.Message,
+				id:        c.ID,
+				committer: c.Author.Name,
+			})
+	}
+	return &pd
+}
+
+func (pd *pushData) buildPushLines() []string {
+	lines := []string{}
 	noun := "commit"
-	if count > 1 {
+	if pd.count > 1 {
 		noun += "s"
 	}
-	branch := lastString(strings.Split(push.Ref, "/"))
-
-	longurl := ""
-	if count == 1 {
-		longurl = fmt.Sprintf("https://github.com/%s/commit/%s",
-			repofull, push.HeadCommit.ID)
-	} else {
-		longurl = fmt.Sprintf("https://github.com/%s/compare/%s...%s",
-			repofull, push.Before, push.After)
-	}
-
+	// TODO shorten longurl
 	l := fmt.Sprintf("[%s] %s %s %d %s to %s: %s",
-		repo, pusher, verb, count, noun,
-		branch, shorten(longurl))
+		pd.repo, pd.pusher, pd.verb, pd.count, noun,
+		pd.branch, pd.longURL)
 	lines = append(lines, l)
 
-	for i, n := count-1, maxcommits; i >= 0 && n > 0; i-- {
-		c := push.Commits[i]
-		subject := lastString(strings.Split(c.Message, "\n"))
+	for i, n := len(pd.commits)-1, maxcommits; i >= 0 && n > 0; i-- {
+		c := pd.commits[i]
 		l := fmt.Sprintf("%s/%s %s %s: %s",
-			repo, branch, c.ID[:7], c.Committer.Name, subject)
+			pd.repo, pd.branch, c.id[:7], c.committer, strings.Split(c.message, "\n")[0])
 		lines = append(lines, l)
 		n--
 	}
