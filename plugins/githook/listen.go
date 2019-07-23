@@ -36,6 +36,10 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
+func last(ss []string) string {
+	return ss[len(ss)-1]
+}
+
 func (gh Githook) Validate(channels []string) error {
 	if gh.Port == 0 {
 		return fmt.Errorf("http listen port not configured (==0)")
@@ -59,7 +63,7 @@ func (gh Githook) Listen(b bot.Bot) {
 				log.Printf("say: not connected")
 				return
 			}
-			if !stringIn(ch, b.Channels()) {
+			if !contains(b.Channels(), ch) {
 				log.Printf("say: not on %s\n", ch)
 				return
 			}
@@ -134,19 +138,6 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 	}
 }
 
-func lastString(ss []string) string {
-	return ss[len(ss)-1]
-}
-
-func stringIn(s string, ss []string) bool {
-	for _, has := range ss {
-		if has == s {
-			return true
-		}
-	}
-	return false
-}
-
 type pushData struct {
 	repo     string
 	repoFull string
@@ -172,7 +163,7 @@ func newPushDataFromGithub(push github.PushPayload) *pushData {
 		pd.verb = "force-" + pd.verb
 	}
 	pd.count = int64(len(push.Commits))
-	pd.branch = lastString(strings.Split(push.Ref, "/"))
+	pd.branch = last(strings.Split(push.Ref, "/"))
 	for _, c := range push.Commits {
 		pd.commits = append(pd.commits,
 			commitData{
@@ -192,7 +183,7 @@ func newPushDataFromGitlab(push gitlab.PushEventPayload) *pushData {
 	pd.verb = "pushed"
 	// TODO no force-pushed?
 	pd.count = push.TotalCommitsCount
-	pd.branch = lastString(strings.Split(push.Ref, "/"))
+	pd.branch = last(strings.Split(push.Ref, "/"))
 	for _, c := range push.Commits {
 		pd.commits = append(pd.commits,
 			commitData{
