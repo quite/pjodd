@@ -56,21 +56,21 @@ func (gh Githook) Validate(channels []string) error {
 	return nil
 }
 
-func (gh Githook) Listen(b bot.Bot) {
+func (gh Githook) Listen(bot bot.Bot) {
 	go gh.doListen(
 		func(ch string, line string) {
-			if !b.Connected() {
+			if !bot.Connected() {
 				log.Printf("say: not connected")
 				return
 			}
-			if !contains(b.Channels(), ch) {
+			if !contains(bot.Channels(), ch) {
 				log.Printf("say: not on %s\n", ch)
 				return
 			}
-			b.Privmsg(ch, line)
+			bot.Privmsg(ch, line)
 		},
 		func(msg string) {
-			b.Quit(msg)
+			bot.Quit(msg)
 		})
 }
 
