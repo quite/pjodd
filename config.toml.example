@@ -1,14 +1,18 @@
-server = "localhost"
+[irc]
+
+[[irc.server]]
+server = "localhost:6667"
 ssl = false
-nickname = "pjodd"
-username = "pjodd"
+password = ""
+nick = "pjodd"
+ident = "pjodd"
 realname = "Pjodd"
 channels = ["#test"]
 
 #[githook]
-#host = ""
-#port = 32032
+#listen = ":32032"
 #[[githook.target]]
 #path = "/path_part_of_payload_url"
 #secret = "shared_secret"
+#server = "localhost:6667"
 #channel = "#test"

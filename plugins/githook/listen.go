@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/StalkR/goircbot/bot"
+	"github.com/quite/pjodd/util"
 	"gopkg.in/go-playground/webhooks.v5/github"
 	"gopkg.in/go-playground/webhooks.v5/gitlab"
 )
@@ -16,78 +17,60 @@ const (
 )
 
 type Githook struct {
-	Host   string
-	Port   int
-	Target []Target
+	ListenAddr string `toml:"listen"`
+	Target     []Target
 }
 
 type Target struct {
 	Path    string
 	Secret  string
+	Server  string
 	Channel string
 }
 
-func contains(ss []string, s string) bool {
-	for _, i := range ss {
-		if i == s {
-			return true
-		}
-	}
-	return false
-}
-
-func last(ss []string) string {
-	return ss[len(ss)-1]
-}
-
-func (gh Githook) Validate(channels []string) error {
-	if gh.Port == 0 {
-		return fmt.Errorf("http listen port not configured (==0)")
-	}
-	if len(gh.Target) == 0 {
-		return fmt.Errorf("no targets configured")
-	}
-	for _, target := range gh.Target {
-		if !contains(channels, target.Channel) {
-			return fmt.Errorf("target channel `%s` is not among the configured %s",
-				target.Channel, channels)
-		}
-	}
-	return nil
-}
-
-func (gh Githook) Listen(bot bot.Bot) {
+func (gh Githook) Listen(bots map[string]bot.Bot) {
 	go gh.doListen(
-		func(ch string, line string) {
-			if !bot.Connected() {
-				log.Printf("say: not connected")
+		func(t Target, l string) {
+			b, ok := bots[t.Server]
+			if !ok {
+				log.Printf("say: target bot `%s` not found", t.Server)
 				return
 			}
-			if !contains(bot.Channels(), ch) {
-				log.Printf("say: not on %s\n", ch)
+			if !b.Connected() {
+				log.Printf("say: bot `%s` not connected", t.Server)
 				return
 			}
-			bot.Privmsg(ch, line)
+			if !util.Contains(b.Channels(), t.Channel) {
+				log.Printf("say: bot `%s` not on chan `%s`\n", t.Server, t.Channel)
+				return
+			}
+			b.Privmsg(t.Channel, l)
 		},
 		func(msg string) {
-			bot.Quit(msg)
+			for _, b := range bots {
+				b.Quit(msg)
+			}
 		})
 }
 
-func (gh Githook) doListen(say func(string, string), quit func(string)) {
-	for _, target := range gh.Target {
+func (gh Githook) doListen(say func(Target, string), quit func(string)) {
+	if gh.ListenAddr == "" || len(gh.Target) == 0 {
+		return
+	}
+
+	for _, t := range gh.Target {
 		// rebind to a new var for the closure
-		target := target
+		t := t
 
-		log.Printf("githook github target path:%s channel:%s\n",
-			target.Path, target.Channel)
+		log.Printf("githook path:%s targeting %s/%s\n",
+			t.Path, t.Server, t.Channel)
 
-		http.HandleFunc(target.Path, func(w http.ResponseWriter, r *http.Request) {
+		http.HandleFunc(t.Path, func(w http.ResponseWriter, r *http.Request) {
 			_, fromGithub := r.Header["X-Github-Event"]
 			_, fromGitlab := r.Header["X-Gitlab-Event"]
 			switch {
 			case fromGithub:
-				hook, _ := github.New(github.Options.Secret(target.Secret))
+				hook, _ := github.New(github.Options.Secret(t.Secret))
 				payload, err := hook.Parse(r, github.PushEvent, github.PingEvent)
 				if err != nil {
 					log.Printf("github hook.Parse: %s\n", err)
@@ -95,17 +78,17 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 				}
 				switch payload := payload.(type) {
 				case github.PushPayload:
-					log.Printf("path:%s channel:%s\n", target.Path, target.Channel)
-					pd := newPushDataFromGithub(payload)
+					log.Printf("path:%s server:%s channel:%s\n", t.Path, t.Server, t.Channel)
+					pd := newPushDataFromGithub(&payload)
 					for _, l := range pd.buildPushLines() {
-						say(target.Channel, l)
+						say(t, l)
 						log.Printf("  %s\n", l)
 					}
 				case github.PingPayload:
 					log.Printf("pinged: %+v\n", payload)
 				}
 			case fromGitlab:
-				hook, _ := gitlab.New(gitlab.Options.Secret(target.Secret))
+				hook, _ := gitlab.New(gitlab.Options.Secret(t.Secret))
 				payload, err := hook.Parse(r, gitlab.PushEvents)
 				if err != nil {
 					log.Printf("gitlab hook.Parse: %s\n", err)
@@ -114,10 +97,10 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 				}
 				switch payload := payload.(type) {
 				case gitlab.PushEventPayload:
-					log.Printf("path:%s channel:%s\n", target.Path, target.Channel)
-					pd := newPushDataFromGitlab(payload)
+					log.Printf("path:%s channel:%s\n", t.Path, t.Channel)
+					pd := newPushDataFromGitlab(&payload)
 					for _, l := range pd.buildPushLines() {
-						say(target.Channel, l)
+						say(t, l)
 						log.Printf("  %s\n", l)
 					}
 					// case gitlab.PingPayload:
@@ -129,8 +112,8 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 		})
 	}
 
-	log.Printf("githook listening on %s:%d\n", gh.Host, gh.Port)
-	err := http.ListenAndServe(fmt.Sprintf("%s:%d", gh.Host, gh.Port), nil)
+	log.Printf("githook listening on %s\n", gh.ListenAddr)
+	err := http.ListenAndServe(gh.ListenAddr, nil)
 	if err != nil {
 		// TODO be more graceful perhaps. quit at all?
 		quit(err.Error())
@@ -138,6 +121,7 @@ func (gh Githook) doListen(say func(string, string), quit func(string)) {
 	}
 }
 
+// TODO an interface that can be implemented for github/gitlab/etc?
 type pushData struct {
 	repo     string
 	repoFull string
@@ -153,7 +137,7 @@ type commitData struct {
 	committer string
 }
 
-func newPushDataFromGithub(push github.PushPayload) *pushData {
+func newPushDataFromGithub(push *github.PushPayload) *pushData {
 	pd := pushData{}
 	pd.repo = push.Repository.Name
 	pd.repoFull = push.Repository.FullName
@@ -163,19 +147,19 @@ func newPushDataFromGithub(push github.PushPayload) *pushData {
 		pd.verb = "force-" + pd.verb
 	}
 	pd.count = int64(len(push.Commits))
-	pd.branch = last(strings.Split(push.Ref, "/"))
-	for _, c := range push.Commits {
+	pd.branch = util.Last(strings.Split(push.Ref, "/"))
+	for i := range push.Commits {
 		pd.commits = append(pd.commits,
 			commitData{
-				message:   c.Message,
-				id:        c.ID,
-				committer: c.Committer.Name,
+				message:   push.Commits[i].Message,
+				id:        push.Commits[i].ID,
+				committer: push.Commits[i].Committer.Name,
 			})
 	}
 	return &pd
 }
 
-func newPushDataFromGitlab(push gitlab.PushEventPayload) *pushData {
+func newPushDataFromGitlab(push *gitlab.PushEventPayload) *pushData {
 	pd := pushData{}
 	pd.repo = push.Project.Name
 	pd.repoFull = push.Project.PathWithNamespace
@@ -183,13 +167,13 @@ func newPushDataFromGitlab(push gitlab.PushEventPayload) *pushData {
 	pd.verb = "pushed"
 	// TODO no force-pushed?
 	pd.count = push.TotalCommitsCount
-	pd.branch = last(strings.Split(push.Ref, "/"))
-	for _, c := range push.Commits {
+	pd.branch = util.Last(strings.Split(push.Ref, "/"))
+	for i := range push.Commits {
 		pd.commits = append(pd.commits,
 			commitData{
-				message:   c.Message,
-				id:        c.ID,
-				committer: c.Author.Name,
+				message:   push.Commits[i].Message,
+				id:        push.Commits[i].ID,
+				committer: push.Commits[i].Author.Name,
 			})
 	}
 	return &pd
