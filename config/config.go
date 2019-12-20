@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 
-	"github.com/quite/pjodd/plugins/githook"
-	"github.com/quite/pjodd/util"
+	"github.com/quite/sparv/plugins/githook"
+	"github.com/quite/sparv/util"
 )
 
 type Config struct {

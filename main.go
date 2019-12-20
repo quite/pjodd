@@ -9,7 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/StalkR/goircbot/bot"
 	"github.com/fluffle/goirc/logging/glog"
-	"github.com/quite/pjodd/config"
+	"github.com/quite/sparv/config"
 )
 
 func main() {

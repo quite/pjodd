@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/StalkR/goircbot/bot"
-	"github.com/quite/pjodd/util"
+	"github.com/quite/sparv/util"
 	"gopkg.in/go-playground/webhooks.v5/github"
 	"gopkg.in/go-playground/webhooks.v5/gitlab"
 )

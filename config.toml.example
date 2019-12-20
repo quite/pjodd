@@ -4,9 +4,9 @@
 server = "localhost:6667"
 ssl = false
 password = ""
-nick = "pjodd"
-ident = "pjodd"
-realname = "Pjodd"
+nick = "sparv"
+ident = "sparv"
+realname = "Sparv"
 channels = ["#test"]
 
 #[githook]

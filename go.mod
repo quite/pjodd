@@ -1,4 +1,4 @@
-module github.com/quite/pjodd
+module github.com/quite/sparv
 
 go 1.12
 
