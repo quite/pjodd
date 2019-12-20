@@ -52,5 +52,4 @@ func main() {
 	cfg.Githook.Listen(bots)
 
 	wg.Wait()
-
 }

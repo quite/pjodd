@@ -1,4 +1,11 @@
 linters:
   enable-all: true
   disable:
-    - "gochecknoglobals"
+    - gochecknoglobals
+    - funlen
+    - wsl
+
+linters-settings:
+  gocritic:
+    disabled-checks:
+      - singleCaseSwitch
